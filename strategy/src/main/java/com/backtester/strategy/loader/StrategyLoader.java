@@ -1,6 +1,5 @@
 package com.backtester.strategy.loader;
 
-import com.backtester.strategy.BaseStrategy;
 import com.backtester.strategy.Strategy;
 import com.backtester.strategy.ml.OnnxStrategy;
 
