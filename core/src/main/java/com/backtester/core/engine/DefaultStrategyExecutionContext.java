@@ -309,21 +309,49 @@ public class DefaultStrategyExecutionContext implements StrategyExecutionContext
 
     @Override
     public double quantityForDollars(double dollars) {
-        double price = getCurrentBar().close();
-        return dollars / price;
+        Bar bar = getCurrentBar();
+        double price = bar.close();
+
+        // Account for spread (buying at ask price)
+        double halfSpread = config.spreadModel().calculateHalfSpread(price, bar);
+        double askPrice = price + halfSpread;
+
+        // Account for expected slippage
+        double slippage = config.slippageModel().calculate(askPrice, 1.0, bar, true);
+        double effectivePrice = askPrice * (1 + slippage);
+
+        // Account for commission (rough estimate per share)
+        double commissionPerShare = config.commissionModel().calculate(1.0, effectivePrice);
+
+        // Total cost per share
+        double costPerShare = effectivePrice + commissionPerShare;
+
+        // Calculate quantity that fits within budget
+        return Math.floor(dollars / costPerShare);
     }
 
     @Override
     public double quantityForPercentage(double percent) {
-        double equity = getEquity();
-        return quantityForDollars(equity * percent / 100.0);
+        // Use available cash, not equity, to avoid over-leveraging
+        double availableCash = getCash();
+        double targetAmount = availableCash * percent / 100.0;
+        return quantityForDollars(targetAmount);
     }
 
     @Override
     public double quantityForRisk(double riskPercent, double stopDistance) {
         if (stopDistance <= 0) return 0;
         double riskAmount = getEquity() * riskPercent / 100.0;
-        return riskAmount / stopDistance;
+        double quantity = riskAmount / stopDistance;
+
+        // Ensure we can actually afford this quantity
+        Bar bar = getCurrentBar();
+        double price = bar.close();
+        double halfSpread = config.spreadModel().calculateHalfSpread(price, bar);
+        double askPrice = price + halfSpread;
+        double maxAffordable = getCash() / askPrice;
+
+        return Math.min(quantity, Math.floor(maxAffordable * 0.99)); // 1% buffer
     }
 
     // ===== Technical Indicators =====
