@@ -11,18 +11,36 @@ import java.io.IOException;
 import java.io.Reader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
 /**
  * CSV data loader for OHLCV market data.
- * Expected format: timestamp,open,high,low,close,volume
- * Where timestamp is Unix epoch (seconds or milliseconds).
+ * Supports multiple formats:
+ * - datetime,date,time,open,high,low,close,volume (datetime like "2008-12-11 01:35:00")
+ * - timestamp,open,high,low,close,volume (Unix epoch)
+ * - Various column naming conventions
  */
 public class CsvDataLoader {
 
     private final CsvParserSettings settings;
+
+    // Common datetime formats
+    private static final DateTimeFormatter[] DATE_FORMATS = {
+        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"),
+        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"),
+        DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss"),
+        DateTimeFormatter.ofPattern("MM/dd/yyyy HH:mm:ss"),
+        DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss"),
+        DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"),
+        DateTimeFormatter.ofPattern("yyyyMMdd HH:mm:ss"),
+        DateTimeFormatter.ISO_LOCAL_DATE_TIME
+    };
 
     public CsvDataLoader() {
         this.settings = createDefaultSettings();
@@ -171,28 +189,56 @@ public class CsvDataLoader {
     }
 
     /**
-     * Parse timestamp - handles both seconds and milliseconds epoch.
+     * Parse timestamp - handles both Unix epoch and datetime strings.
      */
     private long parseTimestamp(String value) {
         if (value == null || value.isEmpty()) {
             throw new IllegalArgumentException("Empty timestamp");
         }
 
-        // Remove any decimal part
-        int dotIndex = value.indexOf('.');
-        if (dotIndex > 0) {
-            value = value.substring(0, dotIndex);
+        value = value.trim();
+
+        // Try parsing as datetime string first (contains non-numeric characters like '-' or ':')
+        if (value.contains("-") || value.contains("/") || value.contains("T")) {
+            return parseDateTimeString(value);
         }
 
-        long timestamp = Long.parseLong(value.trim());
+        // Try parsing as numeric epoch
+        try {
+            // Remove any decimal part
+            int dotIndex = value.indexOf('.');
+            if (dotIndex > 0) {
+                value = value.substring(0, dotIndex);
+            }
 
-        // If timestamp is in seconds (less than year 2100 in seconds), convert to milliseconds
-        // Year 2100 in seconds ≈ 4102444800
-        if (timestamp < 4_102_444_800L) {
-            timestamp *= 1000;
+            long timestamp = Long.parseLong(value);
+
+            // If timestamp is in seconds (less than year 2100 in seconds), convert to milliseconds
+            // Year 2100 in seconds ≈ 4102444800
+            if (timestamp < 4_102_444_800L) {
+                timestamp *= 1000;
+            }
+
+            return timestamp;
+        } catch (NumberFormatException e) {
+            // Fall back to datetime parsing
+            return parseDateTimeString(value);
         }
+    }
 
-        return timestamp;
+    /**
+     * Parse datetime string using various common formats.
+     */
+    private long parseDateTimeString(String value) {
+        for (DateTimeFormatter formatter : DATE_FORMATS) {
+            try {
+                LocalDateTime dateTime = LocalDateTime.parse(value, formatter);
+                return dateTime.toInstant(ZoneOffset.UTC).toEpochMilli();
+            } catch (DateTimeParseException ignored) {
+                // Try next format
+            }
+        }
+        throw new IllegalArgumentException("Unable to parse datetime: " + value);
     }
 
     private double parseDouble(String value) {
