@@ -173,18 +173,20 @@ public class DefaultStrategyExecutionContext implements StrategyExecutionContext
                 ? basePrice + halfSpread  // Buying at ask
                 : basePrice - halfSpread; // Selling at bid
 
-        // Apply slippage
+        // Apply slippage - slippage model returns a dollar amount, add/subtract directly
         boolean isBuy = quantity > 0;
-        double slippage = config.slippageModel().calculate(priceAfterSpread, Math.abs(quantity), bar, isBuy);
+        double slippageAmount = config.slippageModel().calculate(priceAfterSpread, Math.abs(quantity), bar, isBuy);
         double fillPrice = quantity > 0
-                ? priceAfterSpread * (1 + slippage)
-                : priceAfterSpread * (1 - slippage);
+                ? priceAfterSpread + slippageAmount  // Buying: price goes up
+                : priceAfterSpread - slippageAmount; // Selling: price goes down
 
         // Calculate commission
         double commission = config.commissionModel().calculate(Math.abs(quantity), fillPrice);
 
         // Execute the trade
-        executeTrade(quantity, fillPrice, commission, slippage * Math.abs(quantity) * priceAfterSpread, halfSpread * Math.abs(quantity));
+        double slippageCost = slippageAmount * Math.abs(quantity);
+        double spreadCost = halfSpread * Math.abs(quantity);
+        executeTrade(quantity, fillPrice, commission, slippageCost, spreadCost);
 
         return fillPrice;
     }
@@ -196,21 +198,35 @@ public class DefaultStrategyExecutionContext implements StrategyExecutionContext
         Bar bar = getCurrentBar();
 
         // Check if price is within bar's range
-        boolean canFill = (quantity > 0)
-                ? price >= bar.low() && price <= bar.high()   // Buy limit: price must be reachable
-                : price >= bar.low() && price <= bar.high();  // Sell limit: price must be reachable
+        boolean canFill = price >= bar.low() && price <= bar.high();
 
         if (!canFill) {
             return Double.NaN; // Order not filled
         }
 
+        // Determine actual fill price (handle gaps)
+        double fillPrice = price;
+        if (quantity < 0) {
+            // Selling (stop loss for long position)
+            // If bar opened below our stop, we fill at open (gap down)
+            if (bar.open() < price) {
+                fillPrice = bar.open();
+            }
+        } else {
+            // Buying (stop loss for short position)
+            // If bar opened above our stop, we fill at open (gap up)
+            if (bar.open() > price) {
+                fillPrice = bar.open();
+            }
+        }
+
         // Apply commission only (no slippage for limit orders)
-        double commission = config.commissionModel().calculate(Math.abs(quantity), price);
+        double commission = config.commissionModel().calculate(Math.abs(quantity), fillPrice);
 
-        // Execute at the specified price
-        executeTrade(quantity, price, commission, 0, 0);
+        // Execute at the determined price
+        executeTrade(quantity, fillPrice, commission, 0, 0);
 
-        return price;
+        return fillPrice;
     }
 
     @Override
@@ -316,18 +332,35 @@ public class DefaultStrategyExecutionContext implements StrategyExecutionContext
         double halfSpread = config.spreadModel().calculateHalfSpread(price, bar);
         double askPrice = price + halfSpread;
 
-        // Account for expected slippage
-        double slippage = config.slippageModel().calculate(askPrice, 1.0, bar, true);
-        double effectivePrice = askPrice * (1 + slippage);
+        // Account for expected slippage - slippage model returns dollar amount
+        double slippageAmount = config.slippageModel().calculate(askPrice, 1.0, bar, true);
+        double effectivePrice = askPrice + slippageAmount;
 
-        // Account for commission (rough estimate per share)
-        double commissionPerShare = config.commissionModel().calculate(1.0, effectivePrice);
+        // Account for commission (rough estimate per unit)
+        double commissionPerUnit = config.commissionModel().calculate(1.0, effectivePrice);
 
-        // Total cost per share
-        double costPerShare = effectivePrice + commissionPerShare;
+        // Total cost per unit
+        double costPerUnit = effectivePrice + commissionPerUnit;
 
         // Calculate quantity that fits within budget
-        return Math.floor(dollars / costPerShare);
+        double rawQuantity = dollars / costPerUnit;
+
+        // Round based on config setting
+        return roundQuantity(rawQuantity);
+    }
+
+    /**
+     * Round quantity based on integerQuantityOnly setting.
+     * For futures: floor to integer. For forex/crypto: floor to 4 decimal places.
+     */
+    private double roundQuantity(double quantity) {
+        if (config.integerQuantityOnly()) {
+            // Futures contracts - integer only
+            return Math.floor(quantity);
+        } else {
+            // Forex/crypto/stocks - allow fractional (4 decimal places)
+            return Math.floor(quantity * 10000) / 10000.0;
+        }
     }
 
     @Override
@@ -349,9 +382,11 @@ public class DefaultStrategyExecutionContext implements StrategyExecutionContext
         double price = bar.close();
         double halfSpread = config.spreadModel().calculateHalfSpread(price, bar);
         double askPrice = price + halfSpread;
-        double maxAffordable = getCash() / askPrice;
+        double maxAffordable = (getCash() * 0.99) / askPrice; // 1% buffer
 
-        return Math.min(quantity, Math.floor(maxAffordable * 0.99)); // 1% buffer
+        // Round based on config setting
+        double finalQty = Math.min(quantity, maxAffordable);
+        return roundQuantity(finalQty);
     }
 
     // ===== Technical Indicators =====

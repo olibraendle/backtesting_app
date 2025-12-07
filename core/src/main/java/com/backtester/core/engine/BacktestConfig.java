@@ -14,7 +14,8 @@ public record BacktestConfig(
         SlippageModel slippageModel,
         boolean allowShorts,
         double maxPositionSizePercent,  // Max % of equity per position
-        int warmupBars                  // Bars to skip for indicator warmup
+        int warmupBars,                 // Bars to skip for indicator warmup
+        boolean integerQuantityOnly     // Force integer quantities (for futures contracts)
 ) {
     /**
      * Default configuration with $100,000 starting capital.
@@ -27,7 +28,8 @@ public record BacktestConfig(
                 SlippageModel.fixedPercent(0.05),
                 true,
                 100.0,  // 100% of equity (no limit)
-                0       // No warmup
+                0,      // No warmup
+                false   // Allow fractional quantities
         );
     }
 
@@ -42,7 +44,8 @@ public record BacktestConfig(
                 SlippageModel.zero(),
                 true,
                 100.0,
-                0
+                0,
+                false   // Allow fractional quantities
         );
     }
 
@@ -61,6 +64,7 @@ public record BacktestConfig(
         private boolean allowShorts = true;
         private double maxPositionSizePercent = 100.0;
         private int warmupBars = 0;
+        private boolean integerQuantityOnly = false;
 
         public Builder initialCapital(double initialCapital) {
             this.initialCapital = initialCapital;
@@ -112,6 +116,14 @@ public record BacktestConfig(
             return this;
         }
 
+        /**
+         * Set to true to enforce integer quantities only (for futures contracts).
+         */
+        public Builder integerQuantityOnly(boolean integerQuantityOnly) {
+            this.integerQuantityOnly = integerQuantityOnly;
+            return this;
+        }
+
         public BacktestConfig build() {
             return new BacktestConfig(
                     initialCapital,
@@ -120,7 +132,8 @@ public record BacktestConfig(
                     slippageModel,
                     allowShorts,
                     maxPositionSizePercent,
-                    warmupBars
+                    warmupBars,
+                    integerQuantityOnly
             );
         }
     }

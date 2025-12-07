@@ -341,6 +341,7 @@ public class MainWindow {
             MonteCarloSimulator.MonteCarloResult mcResult = monteCarlo.simulate(result.getTrades());
 
             // Update UI
+            benchmarkPanel.setContext(config, selectedStrategy, loadedData);
             benchmarkPanel.setResult(result, stats, mcResult);
             simulationHistory.add(result);
             simulationListPanel.addResult(result, stats);

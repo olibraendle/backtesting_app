@@ -20,6 +20,8 @@ public class DataPanel {
     private final GridPane infoGrid;
     private final ProgressIndicator loadingIndicator;
     private final Label noDataLabel;
+    private final VBox warningsBox;
+    private final Label survivorshipWarningLabel;
 
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
@@ -43,7 +45,19 @@ public class DataPanel {
         infoGrid.setVgap(8);
         infoGrid.setVisible(false);
 
-        root.getChildren().addAll(noDataLabel, loadingIndicator, infoGrid);
+        // Warnings box for survivorship bias and other data warnings
+        warningsBox = new VBox(5);
+        warningsBox.setPadding(new Insets(10));
+        warningsBox.setStyle("-fx-background-color: #332200; -fx-border-color: #aa6600; " +
+                "-fx-border-radius: 5; -fx-background-radius: 5;");
+        warningsBox.setVisible(false);
+
+        survivorshipWarningLabel = new Label();
+        survivorshipWarningLabel.setWrapText(true);
+        survivorshipWarningLabel.setStyle("-fx-text-fill: #ffcc00; -fx-font-size: 11px;");
+        warningsBox.getChildren().add(survivorshipWarningLabel);
+
+        root.getChildren().addAll(noDataLabel, loadingIndicator, infoGrid, warningsBox);
     }
 
     public Node getNode() {
@@ -113,6 +127,58 @@ public class DataPanel {
         if (quality.invalidBars() > 0) {
             addRow(row++, "Invalid Bars:", String.valueOf(quality.invalidBars()));
         }
+
+        // Show survivorship bias warnings
+        updateSurvivorshipWarnings(info);
+    }
+
+    /**
+     * Analyze data and show survivorship bias warnings.
+     */
+    private void updateSurvivorshipWarnings(DataInfo info) {
+        StringBuilder warnings = new StringBuilder();
+        boolean hasWarnings = false;
+
+        // Check for signs of survivorship bias
+
+        // 1. Single asset testing
+        warnings.append("⚠ SURVIVORSHIP BIAS WARNING\n\n");
+
+        // Check data duration - long historical data on single asset is at risk
+        if (info.durationDays() > 365 * 5) { // More than 5 years
+            warnings.append("• SINGLE ASSET BIAS: Testing on a single asset that survived ")
+                    .append(String.format("%.1f years ", info.durationDays() / 365.0))
+                    .append("introduces survivorship bias. Failed/delisted assets are excluded.\n\n");
+            hasWarnings = true;
+        }
+
+        // 2. Check if final price is significantly positive (survivorship indicator)
+        if (info.priceChangePercent() > 100) { // Asset more than doubled
+            warnings.append("• WINNER BIAS: This asset gained ")
+                    .append(String.format("%.0f%%", info.priceChangePercent()))
+                    .append(" over the test period. ")
+                    .append("Assets that failed would show different characteristics.\n\n");
+            hasWarnings = true;
+        }
+
+        // 3. General warnings for backtesting
+        if (hasWarnings) {
+            warnings.append("RECOMMENDATIONS:\n");
+            warnings.append("• Test across multiple assets including those that declined\n");
+            warnings.append("• Include delisted/bankrupt stocks in universe if possible\n");
+            warnings.append("• Use point-in-time index constituents for realistic testing\n");
+            warnings.append("• Compare results against random asset selection\n");
+            warnings.append("• Apply Monte Carlo simulation to stress test results");
+        } else {
+            // Show general best practices
+            warnings.append("• Single-asset backtesting may be subject to survivorship bias\n");
+            warnings.append("• Consider testing across multiple assets\n");
+            warnings.append("• Verify data includes dividends/splits if applicable");
+            hasWarnings = true; // Always show some warning
+        }
+
+        survivorshipWarningLabel.setText(warnings.toString());
+        warningsBox.setVisible(hasWarnings);
     }
 
     private void addRow(int row, String label, String value) {

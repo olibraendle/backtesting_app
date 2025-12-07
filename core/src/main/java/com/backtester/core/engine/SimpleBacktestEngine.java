@@ -7,6 +7,8 @@ import com.backtester.common.model.TimeSeries;
 import com.backtester.common.strategy.ExecutableStrategy;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Simplified backtesting engine that gives strategies FULL control.
@@ -74,9 +76,10 @@ public class SimpleBacktestEngine {
 
         long executionTime = System.currentTimeMillis() - startTime;
 
-        // Calculate Buy & Hold return
+        // Calculate Buy & Hold return and equity history
         double buyAndHoldReturn = calculateBuyAndHoldReturn(data);
         double buyAndHoldFinalEquity = config.initialCapital() * (1 + buyAndHoldReturn / 100.0);
+        List<Double> buyAndHoldEquityHistory = calculateBuyAndHoldEquityHistory(data, config.initialCapital());
 
         // Build result
         return BacktestResult.builder()
@@ -88,6 +91,7 @@ public class SimpleBacktestEngine {
                 .finalEquity(portfolio.getEquity())
                 .trades(portfolio.getTrades())
                 .equityHistory(portfolio.getEquityHistory())
+                .buyAndHoldEquityHistory(buyAndHoldEquityHistory)
                 .buyAndHoldReturn(buyAndHoldReturn)
                 .buyAndHoldFinalEquity(buyAndHoldFinalEquity)
                 .totalCommissions(context.getTotalCommissions())
@@ -107,5 +111,22 @@ public class SimpleBacktestEngine {
         double startPrice = data.getFirst().close();
         double endPrice = data.getLast().close();
         return ((endPrice - startPrice) / startPrice) * 100;
+    }
+
+    /**
+     * Calculate Buy & Hold equity history - simulating holding from the start.
+     */
+    private List<Double> calculateBuyAndHoldEquityHistory(TimeSeries data, double initialCapital) {
+        List<Double> history = new ArrayList<>();
+        if (data.isEmpty()) return history;
+
+        double startPrice = data.getFirst().close();
+        double shares = initialCapital / startPrice;
+
+        for (int i = 0; i < data.size(); i++) {
+            double equity = shares * data.get(i).close();
+            history.add(equity);
+        }
+        return history;
     }
 }

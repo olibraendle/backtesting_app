@@ -1,7 +1,6 @@
 package com.backtester.strategy;
 
 import com.backtester.strategy.builtin.*;
-import com.backtester.strategy.ml.SimpleNeuralStrategy;
 
 import java.util.*;
 import java.util.function.Supplier;
@@ -16,11 +15,9 @@ public class StrategyRegistry {
 
     static {
         // Register built-in strategies
-        register("SMA Crossover", SmaStrategy.class);
-        register("RSI Mean Reversion", RsiStrategy.class);
-        register("Donchian Breakout", BreakoutStrategy.class);
-        register("MACD Signal", MacdStrategy.class);
-        register("Neural Network (ML)", SimpleNeuralStrategy.class);
+        register("Fast SMA Test", FastSmaStrategy.class);
+        register("My Strategy", MyStrategy.class);
+        register("ONNX ML Strategy", OnnxStrategy.class);
     }
 
     /**
@@ -96,10 +93,8 @@ public class StrategyRegistry {
      */
     public static void resetToBuiltins() {
         STRATEGIES.clear();
-        register("SMA Crossover", SmaStrategy.class);
-        register("RSI Mean Reversion", RsiStrategy.class);
-        register("Donchian Breakout", BreakoutStrategy.class);
-        register("MACD Signal", MacdStrategy.class);
-        register("Neural Network (ML)", SimpleNeuralStrategy.class);
+        register("Fast SMA Test", FastSmaStrategy.class);
+        register("My Strategy", MyStrategy.class);
+        register("ONNX ML Strategy", OnnxStrategy.class);
     }
 }

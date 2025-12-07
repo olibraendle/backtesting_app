@@ -21,6 +21,7 @@ public class ParametersToolbar {
     private final Spinner<Double> commissionSpinner;
     private final Spinner<Double> spreadSpinner;
     private final Spinner<Double> slippageSpinner;
+    private final CheckBox integerQtyCheckbox;
     private final Button runButton;
     private final Button loadDataButton;
     private final ProgressIndicator progressIndicator;
@@ -71,6 +72,10 @@ public class ParametersToolbar {
         slippageSpinner.setPrefWidth(80);
         Label slipUnit = new Label("%");
 
+        // Integer Quantities Only (for futures)
+        integerQtyCheckbox = new CheckBox("Futures Mode");
+        integerQtyCheckbox.setTooltip(new Tooltip("Integer quantities only (for futures contracts)"));
+
         // Spacer
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
@@ -94,6 +99,8 @@ public class ParametersToolbar {
                 commLabel, commissionSpinner, commUnit,
                 spreadLabel, spreadSpinner, spreadUnit,
                 slipLabel, slippageSpinner, slipUnit,
+                new Separator(javafx.geometry.Orientation.VERTICAL),
+                integerQtyCheckbox,
                 spacer,
                 progressIndicator,
                 runButton
@@ -114,6 +121,7 @@ public class ParametersToolbar {
                 .spreadPercent(spreadSpinner.getValue())
                 .slippagePercent(slippageSpinner.getValue())
                 .allowShorts(true)
+                .integerQuantityOnly(integerQtyCheckbox.isSelected())
                 .build();
     }
 

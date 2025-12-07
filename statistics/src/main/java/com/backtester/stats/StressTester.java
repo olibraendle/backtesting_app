@@ -96,7 +96,8 @@ public class StressTester {
                 ),
                 baseConfig.allowShorts(),
                 baseConfig.maxPositionSizePercent(),
-                baseConfig.warmupBars()
+                baseConfig.warmupBars(),
+                baseConfig.integerQuantityOnly()
         );
 
         String description = String.format("Commission %.1fx, Slippage %.1fx, Spread %.1fx",

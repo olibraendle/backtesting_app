@@ -1,7 +1,6 @@
 package com.backtester.strategy.loader;
 
 import com.backtester.strategy.Strategy;
-import com.backtester.strategy.ml.OnnxStrategy;
 
 import javax.tools.*;
 import java.io.*;
@@ -17,7 +16,6 @@ import java.util.jar.JarFile;
  * - .java source files (compiled on-the-fly)
  * - .class compiled files
  * - .jar files containing strategy classes
- * - .onnx model files (creates OnnxStrategy wrapper)
  *
  * Supports drag-and-drop loading via UI.
  */
@@ -44,8 +42,6 @@ public class StrategyLoader {
                 loaded = loadCompiledClass(file);
             } else if (fileName.endsWith(".jar")) {
                 loaded = loadJarFile(file);
-            } else if (fileName.endsWith(".onnx")) {
-                loaded = loadOnnxModel(file);
             } else {
                 throw new StrategyLoadException("Unsupported file type: " + fileName);
             }
@@ -195,22 +191,6 @@ public class StrategyLoader {
     }
 
     /**
-     * Load ONNX model and wrap in OnnxStrategy.
-     */
-    private LoadedStrategy loadOnnxModel(Path modelPath) throws Exception {
-        // Create a dynamic OnnxStrategy subclass for this model
-        OnnxModelStrategy strategy = new OnnxModelStrategy(modelPath);
-
-        return new LoadedStrategy(
-                strategy.getName(),
-                strategy,
-                modelPath,
-                LoadedStrategy.SourceType.ONNX_MODEL,
-                null
-        );
-    }
-
-    /**
      * Create LoadedStrategy from a class.
      */
     private LoadedStrategy createLoadedStrategy(Class<?> clazz, Path sourcePath,
@@ -280,23 +260,6 @@ public class StrategyLoader {
     }
 
     /**
-     * Dynamic OnnxStrategy wrapper for loaded models.
-     */
-    private static class OnnxModelStrategy extends OnnxStrategy {
-        private final String modelName;
-
-        public OnnxModelStrategy(Path modelPath) {
-            this.modelName = modelPath.getFileName().toString().replace(".onnx", "");
-            setModelPath(modelPath);
-        }
-
-        @Override
-        public String getName() {
-            return "ML: " + modelName;
-        }
-    }
-
-    /**
      * Information about a loaded strategy.
      */
     public static class LoadedStrategy {
@@ -332,14 +295,13 @@ public class StrategyLoader {
                     throw new RuntimeException("Failed to create strategy instance", e);
                 }
             }
-            return instance; // For ONNX strategies, reuse same instance
+            return instance;
         }
 
         public enum SourceType {
             JAVA_SOURCE,
             COMPILED_CLASS,
             JAR_FILE,
-            ONNX_MODEL,
             BUILTIN
         }
     }

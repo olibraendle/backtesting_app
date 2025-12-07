@@ -13,6 +13,7 @@ public class MonteCarloSimulator {
 
     private final int numSimulations;
     private final double initialEquity;
+    private static final int NUM_CURVES_TO_DISPLAY = 100; // Number of equity curves to visualize
 
     public MonteCarloSimulator(int numSimulations, double initialEquity) {
         this.numSimulations = numSimulations;
@@ -40,13 +41,21 @@ public class MonteCarloSimulator {
                 .map(Trade::netPnl)
                 .toList();
 
+        // Store equity curves for visualization (only first N simulations)
+        int numCurvesToStore = Math.min(NUM_CURVES_TO_DISPLAY, numSimulations);
+        List<double[]> equityCurves = new ArrayList<>(numCurvesToStore);
+
         for (int i = 0; i < numSimulations; i++) {
             List<Double> shuffled = shuffleList(tradePnls);
-            SimulationResult result = runSimulation(shuffled);
+            SimulationResult result = runSimulation(shuffled, i < numCurvesToStore);
 
             finalEquities[i] = result.finalEquity;
             maxDrawdowns[i] = result.maxDrawdown;
             maxDrawdownPercents[i] = result.maxDrawdownPercent;
+
+            if (i < numCurvesToStore && result.equityCurve != null) {
+                equityCurves.add(result.equityCurve);
+            }
 
             if (result.finalEquity < initialEquity * 0.5) {
                 ruinCount++;
@@ -78,21 +87,32 @@ public class MonteCarloSimulator {
                 (double) ruinCount / numSimulations * 100,
                 // Raw data for visualization
                 finalEquities,
-                maxDrawdownPercents
+                maxDrawdownPercents,
+                // Equity curves for visualization
+                equityCurves
         );
     }
 
     /**
      * Run a single simulation with shuffled trades.
      */
-    private SimulationResult runSimulation(List<Double> tradePnls) {
+    private SimulationResult runSimulation(List<Double> tradePnls, boolean trackCurve) {
         double equity = initialEquity;
         double peak = equity;
         double maxDrawdown = 0;
         double maxDrawdownPercent = 0;
 
-        for (double pnl : tradePnls) {
-            equity += pnl;
+        double[] curve = trackCurve ? new double[tradePnls.size() + 1] : null;
+        if (trackCurve) {
+            curve[0] = equity;
+        }
+
+        for (int i = 0; i < tradePnls.size(); i++) {
+            equity += tradePnls.get(i);
+
+            if (trackCurve) {
+                curve[i + 1] = equity;
+            }
 
             if (equity > peak) {
                 peak = equity;
@@ -106,11 +126,11 @@ public class MonteCarloSimulator {
             }
         }
 
-        return new SimulationResult(equity, maxDrawdown, maxDrawdownPercent);
+        return new SimulationResult(equity, maxDrawdown, maxDrawdownPercent, curve);
     }
 
     /**
-     * Shuffle a list (Fisher-Yates).
+     * Shuffle a list (Fisher-Yates) - reorders trades but keeps all of them.
      */
     private List<Double> shuffleList(List<Double> original) {
         List<Double> shuffled = new ArrayList<>(original);
@@ -122,6 +142,104 @@ public class MonteCarloSimulator {
             shuffled.set(j, temp);
         }
         return shuffled;
+    }
+
+    /**
+     * Resample a list (random selection WITH replacement).
+     * This creates a bootstrap sample of the same size as original.
+     */
+    private List<Double> resampleList(List<Double> original) {
+        List<Double> resampled = new ArrayList<>(original.size());
+        Random rng = ThreadLocalRandom.current();
+        for (int i = 0; i < original.size(); i++) {
+            int randomIndex = rng.nextInt(original.size());
+            resampled.add(original.get(randomIndex));
+        }
+        return resampled;
+    }
+
+    /**
+     * Run both reshuffle and resample Monte Carlo simulations.
+     * Returns comprehensive results including both methods.
+     */
+    public MonteCarloResult simulateWithResample(List<Trade> trades) {
+        if (trades.isEmpty()) {
+            return MonteCarloResult.empty();
+        }
+
+        int halfSims = numSimulations / 2;
+        double[] finalEquities = new double[numSimulations];
+        double[] maxDrawdowns = new double[numSimulations];
+        double[] maxDrawdownPercents = new double[numSimulations];
+        int ruinCount = 0;
+
+        List<Double> tradePnls = trades.stream()
+                .map(Trade::netPnl)
+                .toList();
+
+        int numCurvesToStore = Math.min(NUM_CURVES_TO_DISPLAY, numSimulations);
+        List<double[]> equityCurves = new ArrayList<>(numCurvesToStore);
+
+        // First half: Reshuffle simulations
+        for (int i = 0; i < halfSims; i++) {
+            List<Double> shuffled = shuffleList(tradePnls);
+            SimulationResult result = runSimulation(shuffled, i < numCurvesToStore / 2);
+
+            finalEquities[i] = result.finalEquity;
+            maxDrawdowns[i] = result.maxDrawdown;
+            maxDrawdownPercents[i] = result.maxDrawdownPercent;
+
+            if (i < numCurvesToStore / 2 && result.equityCurve != null) {
+                equityCurves.add(result.equityCurve);
+            }
+
+            if (result.finalEquity < initialEquity * 0.5) {
+                ruinCount++;
+            }
+        }
+
+        // Second half: Resample simulations (with replacement)
+        for (int i = halfSims; i < numSimulations; i++) {
+            List<Double> resampled = resampleList(tradePnls);
+            SimulationResult result = runSimulation(resampled, i < numCurvesToStore);
+
+            finalEquities[i] = result.finalEquity;
+            maxDrawdowns[i] = result.maxDrawdown;
+            maxDrawdownPercents[i] = result.maxDrawdownPercent;
+
+            if (i < numCurvesToStore && result.equityCurve != null) {
+                equityCurves.add(result.equityCurve);
+            }
+
+            if (result.finalEquity < initialEquity * 0.5) {
+                ruinCount++;
+            }
+        }
+
+        // Sort for percentile calculations
+        Arrays.sort(finalEquities);
+        Arrays.sort(maxDrawdowns);
+        Arrays.sort(maxDrawdownPercents);
+
+        return new MonteCarloResult(
+                numSimulations,
+                initialEquity,
+                percentile(finalEquities, 5),
+                percentile(finalEquities, 25),
+                percentile(finalEquities, 50),
+                percentile(finalEquities, 75),
+                percentile(finalEquities, 95),
+                mean(finalEquities),
+                stdDev(finalEquities),
+                percentile(maxDrawdownPercents, 5),
+                percentile(maxDrawdownPercents, 50),
+                percentile(maxDrawdownPercents, 95),
+                mean(maxDrawdownPercents),
+                (double) ruinCount / numSimulations * 100,
+                finalEquities,
+                maxDrawdownPercents,
+                equityCurves
+        );
     }
 
     private double percentile(double[] sorted, double p) {
@@ -145,7 +263,7 @@ public class MonteCarloSimulator {
         return Math.sqrt(sumSq / (values.length - 1));
     }
 
-    private record SimulationResult(double finalEquity, double maxDrawdown, double maxDrawdownPercent) {}
+    private record SimulationResult(double finalEquity, double maxDrawdown, double maxDrawdownPercent, double[] equityCurve) {}
 
     /**
      * Results from Monte Carlo simulation.
@@ -170,11 +288,13 @@ public class MonteCarloSimulator {
             double ruinProbability,
             // Raw data
             double[] finalEquities,
-            double[] maxDrawdowns
+            double[] maxDrawdowns,
+            // Equity curves for visualization
+            List<double[]> equityCurves
     ) {
         public static MonteCarloResult empty() {
             return new MonteCarloResult(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    new double[0], new double[0]);
+                    new double[0], new double[0], List.of());
         }
 
         /**

@@ -3,7 +3,6 @@ package com.backtester.core.engine;
 import com.backtester.core.portfolio.Portfolio;
 import com.backtester.core.portfolio.Trade;
 import com.backtester.data.model.DataInfo;
-import com.backtester.common.model.TimeSeries;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -26,6 +25,7 @@ public class BacktestResult {
     // Buy & Hold comparison
     private final double buyAndHoldReturn;
     private final double buyAndHoldFinalEquity;
+    private final List<Double> buyAndHoldEquityHistory;
 
     // Cost tracking
     private final double totalCommissions;
@@ -48,6 +48,7 @@ public class BacktestResult {
         this.equityHistory = builder.equityHistory;
         this.buyAndHoldReturn = builder.buyAndHoldReturn;
         this.buyAndHoldFinalEquity = builder.buyAndHoldFinalEquity;
+        this.buyAndHoldEquityHistory = builder.buyAndHoldEquityHistory;
         this.totalCommissions = builder.totalCommissions;
         this.totalSlippage = builder.totalSlippage;
         this.totalSpreadCost = builder.totalSpreadCost;
@@ -151,6 +152,10 @@ public class BacktestResult {
         return buyAndHoldFinalEquity;
     }
 
+    public List<Double> getBuyAndHoldEquityHistory() {
+        return buyAndHoldEquityHistory;
+    }
+
     public double getTotalCommissions() {
         return totalCommissions;
     }
@@ -192,6 +197,7 @@ public class BacktestResult {
         private List<Portfolio.EquityPoint> equityHistory = List.of();
         private double buyAndHoldReturn;
         private double buyAndHoldFinalEquity;
+        private List<Double> buyAndHoldEquityHistory = List.of();
         private double totalCommissions;
         private double totalSlippage;
         private double totalSpreadCost;
@@ -246,6 +252,11 @@ public class BacktestResult {
 
         public Builder buyAndHoldFinalEquity(double buyAndHoldFinalEquity) {
             this.buyAndHoldFinalEquity = buyAndHoldFinalEquity;
+            return this;
+        }
+
+        public Builder buyAndHoldEquityHistory(List<Double> buyAndHoldEquityHistory) {
+            this.buyAndHoldEquityHistory = buyAndHoldEquityHistory;
             return this;
         }
 
