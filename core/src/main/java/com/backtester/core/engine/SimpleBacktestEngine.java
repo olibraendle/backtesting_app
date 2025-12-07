@@ -13,6 +13,25 @@ import java.util.List;
 /**
  * Simplified backtesting engine that gives strategies FULL control.
  *
+ * EXECUTION MODEL: Close-to-Close
+ * ===============================
+ * This backtester uses a "close-to-close" execution model:
+ * - Indicators are computed using data up to and including current bar's close
+ * - Trades execute at the current bar's close price (plus spread/slippage)
+ *
+ * This is an OPTIMISTIC model because in reality:
+ * - You cannot know the close price until the bar is complete
+ * - Real execution would occur at next bar's open
+ *
+ * This model is useful for:
+ * - Initial strategy testing and comparison
+ * - Understanding strategy behavior
+ * - Quick iteration during development
+ *
+ * For more realistic results, consider that actual trading would have:
+ * - Execution at next bar's open (with gap risk)
+ * - Slightly worse fills due to timing uncertainty
+ *
  * The engine only:
  * - Iterates through bars
  * - Provides execution context to strategy
@@ -64,6 +83,11 @@ public class SimpleBacktestEngine {
                 // Let strategy do EVERYTHING
                 strategy.onBar(context);
             }
+
+            // Update previous bar references for spread/slippage models
+            // This ensures dynamic spread/slippage use PREVIOUS bar data (avoids lookahead)
+            config.spreadModel().updatePreviousBar(bar);
+            config.slippageModel().updatePreviousBar(bar);
         }
 
         // Close any remaining position at market

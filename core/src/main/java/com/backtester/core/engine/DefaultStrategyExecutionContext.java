@@ -336,28 +336,20 @@ public class DefaultStrategyExecutionContext implements StrategyExecutionContext
     }
 
     // ===== Position Sizing Helpers =====
+    //
+    // IMPORTANT: Position sizing is spread/slippage AGNOSTIC to ensure that
+    // trade count and signal timing are NOT affected by cost settings.
+    // Spread and slippage only affect execution COST, not trade EXISTENCE.
+    // This prevents circular dependencies where changing costs changes signals.
 
     @Override
     public double quantityForDollars(double dollars) {
         Bar bar = getCurrentBar();
         double price = bar.close();
 
-        // Account for spread (buying at ask price)
-        double halfSpread = config.spreadModel().calculateHalfSpread(price, bar);
-        double askPrice = price + halfSpread;
-
-        // Account for expected slippage - slippage model returns dollar amount
-        double slippageAmount = config.slippageModel().calculate(askPrice, 1.0, bar, true);
-        double effectivePrice = askPrice + slippageAmount;
-
-        // Account for commission (rough estimate per unit)
-        double commissionPerUnit = config.commissionModel().calculate(1.0, effectivePrice);
-
-        // Total cost per unit
-        double costPerUnit = effectivePrice + commissionPerUnit;
-
-        // Calculate quantity that fits within budget
-        double rawQuantity = dollars / costPerUnit;
+        // Use mid-price only - spread/slippage applied at execution, not sizing
+        // This ensures trade count is invariant to spread/slippage settings
+        double rawQuantity = dollars / price;
 
         // Round based on config setting
         return roundQuantity(rawQuantity);
@@ -391,12 +383,10 @@ public class DefaultStrategyExecutionContext implements StrategyExecutionContext
         double riskAmount = getEquity() * riskPercent / 100.0;
         double quantity = riskAmount / stopDistance;
 
-        // Ensure we can actually afford this quantity
+        // Ensure we can actually afford this quantity (use mid-price, not ask)
         Bar bar = getCurrentBar();
         double price = bar.close();
-        double halfSpread = config.spreadModel().calculateHalfSpread(price, bar);
-        double askPrice = price + halfSpread;
-        double maxAffordable = (getCash() * 0.99) / askPrice; // 1% buffer
+        double maxAffordable = (getCash() * 0.99) / price; // 1% buffer
 
         // Round based on config setting
         double finalQty = Math.min(quantity, maxAffordable);

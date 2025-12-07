@@ -5,29 +5,43 @@ import com.backtester.common.model.Bar;
 /**
  * Spread simulation model.
  * Spread represents the bid-ask difference that affects execution price.
+ *
+ * IMPORTANT: For dynamic spread, uses PREVIOUS bar's volatility to avoid
+ * lookahead bias. Current bar's range is only known at bar close, so using
+ * it for execution at the same bar would be unrealistic.
  */
 public class SpreadModel {
     private final SpreadType type;
     private final double value;
+    private Bar previousBar; // Track previous bar for dynamic spread
 
     public enum SpreadType {
         NONE,            // No spread (ideal conditions)
         FIXED_PIPS,      // Fixed spread in pips (0.0001 for forex)
         FIXED_POINTS,    // Fixed spread in price points
         PERCENTAGE,      // Percentage of price
-        DYNAMIC          // Dynamic based on volatility (ATR-based)
+        DYNAMIC          // Dynamic based on volatility (uses PREVIOUS bar)
     }
 
     public SpreadModel(SpreadType type, double value) {
         this.type = type;
         this.value = value;
+        this.previousBar = null;
+    }
+
+    /**
+     * Update the previous bar reference - call this at end of each bar.
+     * Required for dynamic spread calculation to avoid lookahead bias.
+     */
+    public void updatePreviousBar(Bar bar) {
+        this.previousBar = bar;
     }
 
     /**
      * Calculate spread for a given price.
      *
      * @param price Current price
-     * @param bar   Current bar (for dynamic spread calculation)
+     * @param bar   Current bar (used for reference, but dynamic uses previousBar)
      * @return Half spread (to add/subtract from mid price)
      */
     public double calculateHalfSpread(double price, Bar bar) {
@@ -62,13 +76,22 @@ public class SpreadModel {
     }
 
     /**
-     * Dynamic spread based on bar volatility.
+     * Dynamic spread based on PREVIOUS bar's volatility.
+     * Uses previous bar to avoid lookahead bias - current bar's range
+     * is only known at bar close.
      */
-    private double calculateDynamicSpread(double price, Bar bar) {
-        // Base spread as percentage + volatility component
+    private double calculateDynamicSpread(double price, Bar currentBar) {
+        // Base spread as percentage
         double baseSpread = price * (value / 100.0);
-        double volatilityComponent = bar.range() * 0.1; // 10% of bar range
-        return baseSpread + volatilityComponent;
+
+        // Use PREVIOUS bar's range for volatility component (avoids lookahead)
+        // If no previous bar available, use only base spread
+        if (previousBar != null) {
+            double volatilityComponent = previousBar.range() * 0.1; // 10% of previous bar range
+            return baseSpread + volatilityComponent;
+        }
+
+        return baseSpread;
     }
 
     // ===== Factory Methods =====

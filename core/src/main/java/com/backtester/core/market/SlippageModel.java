@@ -7,24 +7,37 @@ import java.util.Random;
 /**
  * Slippage simulation model.
  * Slippage represents the difference between expected and actual execution price.
+ *
+ * IMPORTANT: For volume-based slippage, uses PREVIOUS bar's volume to avoid
+ * lookahead bias. Current bar's volume is only known at bar close.
  */
 public class SlippageModel {
     private final SlippageType type;
     private final double value;
     private final Random random;
+    private Bar previousBar; // Track previous bar for volume-based slippage
 
     public enum SlippageType {
         NONE,           // No slippage (ideal conditions)
         FIXED_PERCENT,  // Fixed percentage of price
         FIXED_POINTS,   // Fixed price points
         RANDOM_PERCENT, // Random 0 to value percent
-        VOLUME_BASED    // Based on volume (higher volume = less slippage)
+        VOLUME_BASED    // Based on volume (uses PREVIOUS bar's volume)
     }
 
     public SlippageModel(SlippageType type, double value) {
         this.type = type;
         this.value = value;
         this.random = new Random();
+        this.previousBar = null;
+    }
+
+    /**
+     * Update the previous bar reference - call this at end of each bar.
+     * Required for volume-based slippage calculation to avoid lookahead bias.
+     */
+    public void updatePreviousBar(Bar bar) {
+        this.previousBar = bar;
     }
 
     /**
@@ -32,7 +45,7 @@ public class SlippageModel {
      *
      * @param price         Current price
      * @param quantity      Trade quantity
-     * @param bar           Current bar
+     * @param bar           Current bar (used for reference, but volume-based uses previousBar)
      * @param isBuy         True if buying, false if selling
      * @return Slippage amount (always positive, direction handled by caller)
      */
@@ -42,7 +55,7 @@ public class SlippageModel {
             case FIXED_PERCENT -> price * (value / 100.0);
             case FIXED_POINTS -> value;
             case RANDOM_PERCENT -> price * (random.nextDouble() * value / 100.0);
-            case VOLUME_BASED -> calculateVolumeBased(price, quantity, bar);
+            case VOLUME_BASED -> calculateVolumeBased(price, quantity);
         };
     }
 
@@ -56,20 +69,26 @@ public class SlippageModel {
 
     /**
      * Volume-based slippage: larger orders relative to volume have more slippage.
+     * Uses PREVIOUS bar's volume to avoid lookahead bias - current bar's volume
+     * is only known at bar close.
      */
-    private double calculateVolumeBased(double price, double quantity, Bar bar) {
-        if (bar.volume() <= 0) {
-            return price * (value / 100.0);
+    private double calculateVolumeBased(double price, double quantity) {
+        // Base slippage always applies
+        double baseSlippage = price * (value / 100.0) * 0.5;
+
+        // Use PREVIOUS bar's volume for volume impact (avoids lookahead)
+        // If no previous bar available, use only base slippage
+        if (previousBar != null && previousBar.volume() > 0) {
+            // Order size as fraction of previous bar's volume
+            double volumeRatio = (quantity * price) / (previousBar.volume() * previousBar.typicalPrice());
+
+            // Volume impact: 1bp per 1% of volume
+            double volumeImpact = price * volumeRatio * 0.01;
+
+            return baseSlippage + volumeImpact;
         }
 
-        // Order size as fraction of bar volume
-        double volumeRatio = (quantity * price) / (bar.volume() * bar.typicalPrice());
-
-        // Base slippage + volume impact
-        double baseSlippage = price * (value / 100.0) * 0.5;
-        double volumeImpact = price * volumeRatio * 0.01; // 1bp per 1% of volume
-
-        return baseSlippage + volumeImpact;
+        return baseSlippage;
     }
 
     // ===== Factory Methods =====
