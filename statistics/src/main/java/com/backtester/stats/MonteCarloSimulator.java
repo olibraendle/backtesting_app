@@ -3,25 +3,55 @@ package com.backtester.stats;
 import com.backtester.core.portfolio.Trade;
 
 import java.util.*;
-import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Monte Carlo simulation for strategy robustness analysis.
  * Shuffles trade sequence to estimate distribution of outcomes.
+ *
+ * Supports optional seeding for reproducible results.
  */
 public class MonteCarloSimulator {
 
     private final int numSimulations;
     private final double initialEquity;
+    private final Long seed;
+    private Random rng;
     private static final int NUM_CURVES_TO_DISPLAY = 100; // Number of equity curves to visualize
 
-    public MonteCarloSimulator(int numSimulations, double initialEquity) {
+    /**
+     * Create a Monte Carlo simulator with optional seed for reproducibility.
+     *
+     * @param numSimulations Number of simulations to run
+     * @param initialEquity Starting equity
+     * @param seed Random seed (null for non-reproducible random)
+     */
+    public MonteCarloSimulator(int numSimulations, double initialEquity, Long seed) {
         this.numSimulations = numSimulations;
         this.initialEquity = initialEquity;
+        this.seed = seed;
+        this.rng = seed != null ? new Random(seed) : new Random();
+    }
+
+    public MonteCarloSimulator(int numSimulations, double initialEquity) {
+        this(numSimulations, initialEquity, null);
     }
 
     public MonteCarloSimulator(double initialEquity) {
-        this(10000, initialEquity);
+        this(10000, initialEquity, null);
+    }
+
+    /**
+     * Create with specific seed for reproducible results.
+     */
+    public MonteCarloSimulator(double initialEquity, long seed) {
+        this(10000, initialEquity, seed);
+    }
+
+    /**
+     * Reset RNG to initial seed state (for reproducibility).
+     */
+    private void resetRng() {
+        this.rng = seed != null ? new Random(seed) : new Random();
     }
 
     /**
@@ -31,6 +61,9 @@ public class MonteCarloSimulator {
         if (trades.isEmpty()) {
             return MonteCarloResult.empty();
         }
+
+        // Reset RNG for reproducibility if seeded
+        resetRng();
 
         double[] finalEquities = new double[numSimulations];
         double[] maxDrawdowns = new double[numSimulations];
@@ -131,10 +164,10 @@ public class MonteCarloSimulator {
 
     /**
      * Shuffle a list (Fisher-Yates) - reorders trades but keeps all of them.
+     * Uses instance RNG for reproducibility when seeded.
      */
     private List<Double> shuffleList(List<Double> original) {
         List<Double> shuffled = new ArrayList<>(original);
-        Random rng = ThreadLocalRandom.current();
         for (int i = shuffled.size() - 1; i > 0; i--) {
             int j = rng.nextInt(i + 1);
             Double temp = shuffled.get(i);
@@ -147,10 +180,10 @@ public class MonteCarloSimulator {
     /**
      * Resample a list (random selection WITH replacement).
      * This creates a bootstrap sample of the same size as original.
+     * Uses instance RNG for reproducibility when seeded.
      */
     private List<Double> resampleList(List<Double> original) {
         List<Double> resampled = new ArrayList<>(original.size());
-        Random rng = ThreadLocalRandom.current();
         for (int i = 0; i < original.size(); i++) {
             int randomIndex = rng.nextInt(original.size());
             resampled.add(original.get(randomIndex));
@@ -166,6 +199,9 @@ public class MonteCarloSimulator {
         if (trades.isEmpty()) {
             return MonteCarloResult.empty();
         }
+
+        // Reset RNG for reproducibility if seeded
+        resetRng();
 
         int halfSims = numSimulations / 2;
         double[] finalEquities = new double[numSimulations];
