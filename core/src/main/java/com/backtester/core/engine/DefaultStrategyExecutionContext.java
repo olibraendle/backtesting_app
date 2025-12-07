@@ -164,6 +164,13 @@ public class DefaultStrategyExecutionContext implements StrategyExecutionContext
     public double executeMarketOrder(double quantity) {
         if (quantity == 0) return Double.NaN;
 
+        // Enforce integer quantities in futures mode
+        if (config.integerQuantityOnly()) {
+            double sign = quantity > 0 ? 1 : -1;
+            quantity = sign * Math.floor(Math.abs(quantity));
+            if (quantity == 0) return Double.NaN;
+        }
+
         Bar bar = getCurrentBar();
         double basePrice = bar.close();
 
@@ -194,6 +201,13 @@ public class DefaultStrategyExecutionContext implements StrategyExecutionContext
     @Override
     public double executeAtPrice(double quantity, double price) {
         if (quantity == 0) return Double.NaN;
+
+        // Enforce integer quantities in futures mode
+        if (config.integerQuantityOnly()) {
+            double sign = quantity > 0 ? 1 : -1;
+            quantity = sign * Math.floor(Math.abs(quantity));
+            if (quantity == 0) return Double.NaN;
+        }
 
         Bar bar = getCurrentBar();
 

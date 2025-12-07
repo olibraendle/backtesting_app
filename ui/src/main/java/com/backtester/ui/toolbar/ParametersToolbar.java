@@ -53,21 +53,24 @@ public class ParametersToolbar {
 
         // Commission
         Label commLabel = new Label("Commission:");
-        commissionSpinner = new Spinner<>(0.0, 1.0, 0.1, 0.01);
+        SpinnerValueFactory<Double> commFactory = new SpinnerValueFactory.DoubleSpinnerValueFactory(0.0, 1.0, 0.1, 0.01);
+        commissionSpinner = new Spinner<>(commFactory);
         commissionSpinner.setEditable(true);
         commissionSpinner.setPrefWidth(80);
         Label commUnit = new Label("%");
 
         // Spread
         Label spreadLabel = new Label("Spread:");
-        spreadSpinner = new Spinner<>(0.0, 1.0, 0.01, 0.005);
+        SpinnerValueFactory<Double> spreadFactory = new SpinnerValueFactory.DoubleSpinnerValueFactory(0.0, 1.0, 0.01, 0.01);
+        spreadSpinner = new Spinner<>(spreadFactory);
         spreadSpinner.setEditable(true);
         spreadSpinner.setPrefWidth(80);
         Label spreadUnit = new Label("%");
 
         // Slippage
         Label slipLabel = new Label("Slippage:");
-        slippageSpinner = new Spinner<>(0.0, 1.0, 0.05, 0.01);
+        SpinnerValueFactory<Double> slipFactory = new SpinnerValueFactory.DoubleSpinnerValueFactory(0.0, 1.0, 0.05, 0.01);
+        slippageSpinner = new Spinner<>(slipFactory);
         slippageSpinner.setEditable(true);
         slippageSpinner.setPrefWidth(80);
         Label slipUnit = new Label("%");

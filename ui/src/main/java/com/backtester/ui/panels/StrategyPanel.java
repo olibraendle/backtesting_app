@@ -20,6 +20,7 @@ import java.util.function.Consumer;
  */
 public class StrategyPanel {
 
+    private final ScrollPane scrollPane;
     private final VBox root;
     private final ComboBox<String> strategySelector;
     private final Label descriptionLabel;
@@ -74,10 +75,16 @@ public class StrategyPanel {
         );
 
         VBox.setVgrow(parametersGrid, Priority.ALWAYS);
+
+        // Wrap in ScrollPane for scrolling when content is too long
+        scrollPane = new ScrollPane(root);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
     }
 
     public Node getNode() {
-        return root;
+        return scrollPane;
     }
 
     /**
